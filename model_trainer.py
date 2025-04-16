@@ -1,0 +1,1 @@
+# Train XGBoost model on historical data with technical indicators
