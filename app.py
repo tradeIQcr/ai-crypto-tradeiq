@@ -1,71 +1,88 @@
 import streamlit as st
-import pandas as pd
 import yfinance as yf
+import pandas as pd
 import ta
-import datetime
+import plotly.graph_objs as go
 
-st.set_page_config(page_title="Crypto AI Dashboard", layout="wide")
-st.title("Crypto AI Trade Dashboard")
+st.set_page_config(page_title="AI Crypto TradeIQ", layout="wide")
 
-# Sidebar
-st.sidebar.header("Select Cryptocurrency")
-symbol = st.sidebar.selectbox("Crypto Symbol", ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"])
-start_date = st.sidebar.date_input("Start Date", datetime.date(2022, 1, 1))
-end_date = st.sidebar.date_input("End Date", datetime.date.today())
+st.title("📈 AI Crypto TradeIQ Dashboard")
 
-# Load data
-@st.cache_data
-def load_data(symbol, start, end):
-    df = yf.download(symbol, start=start, end=end)
-    df.reset_index(inplace=True)
-    return df
+# User input
+symbol = st.text_input("Enter a symbol (e.g., BTC-USD, ETH-USD, AAPL):", "BTC-USD")
+start_date = st.date_input("Start date", pd.to_datetime("2022-01-01"))
+end_date = st.date_input("End date", pd.to_datetime("today"))
 
-data = load_data(symbol, start_date, end_date)
+# Download data
+try:
+    data = yf.download(symbol, start=start_date, end=end_date)
+except Exception as e:
+    st.error(f"Error loading data: {e}")
+    st.stop()
 
-if data.empty or "Close" not in data:
-    st.error("No data available. Please try a different date range or symbol.")
-else:
-    # Remove rows with NaN values
-    data.dropna(inplace=True)
+# Validate data
+if data.empty or "Close" not in data.columns:
+    st.error("No valid data found. Try a different symbol or date range.")
+    st.stop()
 
-    # Technical indicators
-if data.empty or "Close" not in data.columns or data["Close"].isnull().all():
-    st.error("Geçerli veri bulunamadı. Lütfen farklı bir tarih aralığı veya sembol deneyin.")
-else:
-    data.dropna(inplace=True)
+close_series = data["Close"]
+if close_series.isnull().all():
+    st.error("No valid closing price data available.")
+    st.stop()
 
-    # RSI
-    try:
-        data["RSI"] = ta.momentum.RSIIndicator(close=data["Close"]).rsi()
-    except Exception as e:
-        data["RSI"] = None
-        st.warning(f"RSI hesaplanamadı: {e}")
+# Drop NaN rows
+data.dropna(inplace=True)
 
-    # MACD
-    try:
-        macd = ta.trend.MACD(data["Close"])
-        data["MACD"] = macd.macd()
-        data["MACD_signal"] = macd.macd_signal()
-    except Exception as e:
-        data["MACD"] = data["MACD_signal"] = None
-        st.warning(f"MACD hesaplanamadı: {e}")
+# Calculate indicators with error handling
+try:
+    data["RSI"] = ta.momentum.RSIIndicator(close=data["Close"]).rsi()
+except Exception as e:
+    st.warning(f"RSI calculation failed: {e}")
+    data["RSI"] = None
 
-    # Bollinger Bands
-    try:
-        bb = ta.volatility.BollingerBands(data["Close"])
-        data["BB_upper"] = bb.bollinger_hband()
-        data["BB_lower"] = bb.bollinger_lband()
-    except Exception as e:
-        data["BB_upper"] = data["BB_lower"] = None
-        st.warning(f"Bollinger Bantları hesaplanamadı: {e}")
+try:
+    macd = ta.trend.MACD(data["Close"])
+    data["MACD"] = macd.macd()
+    data["MACD_signal"] = macd.macd_signal()
+except Exception as e:
+    st.warning(f"MACD calculation failed: {e}")
+    data["MACD"] = data["MACD_signal"] = None
 
+try:
+    bb = ta.volatility.BollingerBands(close=data["Close"])
+    data["BB_upper"] = bb.bollinger_hband()
+    data["BB_lower"] = bb.bollinger_lband()
+except Exception as e:
+    st.warning(f"Bollinger Bands calculation failed: {e}")
+    data["BB_upper"] = data["BB_lower"] = None
 
-    # Chart
-    st.subheader(f"{symbol} Price Chart")
-    st.line_chart(data.set_index("Date")[["Close", "BB_upper", "BB_lower"]])
+# Plot price with Bollinger Bands
+st.subheader("Price Chart with Bollinger Bands")
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=data.index, y=data["Close"], name="Close Price"))
+if "BB_upper" in data.columns and data["BB_upper"].notnull().any():
+    fig.add_trace(go.Scatter(x=data.index, y=data["BB_upper"], name="BB Upper", line=dict(dash='dot')))
+    fig.add_trace(go.Scatter(x=data.index, y=data["BB_lower"], name="BB Lower", line=dict(dash='dot')))
+fig.update_layout(xaxis_title="Date", yaxis_title="Price", height=400)
+st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Technical Indicators")
-    st.line_chart(data.set_index("Date")[["RSI", "MACD", "MACD_signal"]])
+# Plot RSI
+if "RSI" in data.columns and data["RSI"].notnull().any():
+    st.subheader("RSI Indicator")
+    fig_rsi = go.Figure()
+    fig_rsi.add_trace(go.Scatter(x=data.index, y=data["RSI"], name="RSI"))
+    fig_rsi.add_hline(y=70, line_dash="dot", line_color="red")
+    fig_rsi.add_hline(y=30, line_dash="dot", line_color="green")
+    fig_rsi.update_layout(xaxis_title="Date", yaxis_title="RSI", height=300)
+    st.plotly_chart(fig_rsi, use_container_width=True)
 
-    st.subheader("Recent Data")
-    st.dataframe(data.tail())
+# Plot MACD
+if "MACD" in data.columns and data["MACD"].notnull().any():
+    st.subheader("MACD Indicator")
+    fig_macd = go.Figure()
+    fig_macd.add_trace(go.Scatter(x=data.index, y=data["MACD"], name="MACD"))
+    fig_macd.add_trace(go.Scatter(x=data.index, y=data["MACD_signal"], name="Signal Line"))
+    fig_macd.update_layout(xaxis_title="Date", yaxis_title="MACD", height=300)
+    st.plotly_chart(fig_macd, use_container_width=True)
+
+st.success("✅ App loaded successfully. Use the sidebar to test other tickers.")
