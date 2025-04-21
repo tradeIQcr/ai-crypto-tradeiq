@@ -12,7 +12,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
 <style>
     .main .block-container {
@@ -20,12 +20,6 @@ st.markdown("""
     }
     .stAlert {
         padding: 0.5rem;
-    }
-    .st-bb {
-        background-color: transparent;
-    }
-    .st-at {
-        background-color: #0e1117;
     }
     footer {visibility: hidden;}
 </style>
@@ -52,11 +46,9 @@ with st.sidebar:
     show_rsi = st.checkbox("RSI", True)
     show_macd = st.checkbox("MACD", True)
     show_bb = st.checkbox("Bollinger Bands", True)
-    st.markdown("---")
-    st.markdown("**Note:** Data provided by Yahoo Finance")
 
 # Data loading with progress and error handling
-@st.cache_data(ttl=3600)  # Cache data for 1 hour
+@st.cache_data(ttl=3600)
 def load_data(symbol, start_date, end_date):
     try:
         with st.spinner(f"Loading data for {symbol}..."):
@@ -83,16 +75,17 @@ if data.empty or "Close" not in data.columns:
     st.error("No valid data found. Try a different symbol or date range.")
     st.stop()
 
+# Convert to 1D Series for ta library
+close_series = data["Close"].squeeze()  # This converts to 1D Series
+
 # Drop NaN rows and ensure we have enough data
 data = data.dropna()
-if len(data) < 20:  # Minimum data points for meaningful indicators
+if len(data) < 20:
     st.warning("Insufficient data points for accurate technical analysis. Try a longer date range.")
     st.stop()
 
-# Calculate indicators with error handling
-def calculate_indicators(data):
-    close_series = data["Close"]
-    
+# Calculate indicators with proper 1D data
+def calculate_indicators(data, close_series):
     # RSI
     if show_rsi:
         try:
@@ -104,10 +97,10 @@ def calculate_indicators(data):
     # MACD
     if show_macd:
         try:
-            macd = ta.trend.MACD(close_series, window_slow=26, window_fast=12, window_sign=9)
+            macd = ta.trend.MACD(close=close_series, window_slow=26, window_fast=12, window_sign=9)
             data["MACD"] = macd.macd()
             data["MACD_signal"] = macd.macd_signal()
-            data["MACD_hist"] = macd.macd_diff()  # MACD histogram
+            data["MACD_hist"] = macd.macd_diff()
         except Exception as e:
             st.warning(f"MACD calculation failed: {e}")
             data["MACD"] = data["MACD_signal"] = data["MACD_hist"] = None
@@ -117,7 +110,7 @@ def calculate_indicators(data):
         try:
             bb = ta.volatility.BollingerBands(close=close_series, window=20, window_dev=2)
             data["BB_upper"] = bb.bollinger_hband()
-            data["BB_middle"] = bb.bollinger_mavg()  # Middle band (SMA)
+            data["BB_middle"] = bb.bollinger_mavg()
             data["BB_lower"] = bb.bollinger_lband()
         except Exception as e:
             st.warning(f"Bollinger Bands calculation failed: {e}")
@@ -125,18 +118,15 @@ def calculate_indicators(data):
     
     return data
 
-data = calculate_indicators(data)
+data = calculate_indicators(data, close_series)
 
 # Main dashboard layout
 tab1, tab2 = st.tabs(["📊 Price Analysis", "📈 Indicators"])
 
 with tab1:
-    # Price chart with Bollinger Bands
     st.subheader(f"{symbol} Price Analysis")
     
     fig_price = go.Figure()
-    
-    # Price line
     fig_price.add_trace(go.Scatter(
         x=data.index,
         y=data["Close"],
@@ -144,24 +134,19 @@ with tab1:
         line=dict(color='#1f77b4', width=2)
     ))
     
-    # Bollinger Bands if enabled and available
     if show_bb and "BB_upper" in data.columns and data["BB_upper"].notnull().any():
-        # Upper band
         fig_price.add_trace(go.Scatter(
             x=data.index,
             y=data["BB_upper"],
             name="BB Upper",
-            line=dict(color='rgba(255, 0, 0, 0.3)', width=1),
-            fill=None
+            line=dict(color='rgba(255, 0, 0, 0.3)', width=1)
         ))
-        # Middle band
         fig_price.add_trace(go.Scatter(
             x=data.index,
             y=data["BB_middle"],
             name="BB Middle",
             line=dict(color='rgba(0, 0, 255, 0.3)', width=1)
         ))
-        # Lower band
         fig_price.add_trace(go.Scatter(
             x=data.index,
             y=data["BB_lower"],
@@ -175,37 +160,22 @@ with tab1:
         xaxis_title="Date",
         yaxis_title="Price",
         height=500,
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        hovermode="x unified"
     )
     st.plotly_chart(fig_price, use_container_width=True)
 
 with tab2:
-    # RSI chart
     if show_rsi and "RSI" in data.columns and data["RSI"].notnull().any():
         st.subheader("Relative Strength Index (RSI)")
-        
         fig_rsi = go.Figure()
         fig_rsi.add_trace(go.Scatter(
             x=data.index,
             y=data["RSI"],
             name="RSI",
             line=dict(color='purple', width=2)
-        )
-        fig_rsi.add_hline(
-            y=70,
-            line_dash="dot",
-            line_color="red",
-            annotation_text="Overbought",
-            annotation_position="bottom right"
-        )
-        fig_rsi.add_hline(
-            y=30,
-            line_dash="dot",
-            line_color="green",
-            annotation_text="Oversold",
-            annotation_position="top right"
-        )
+        ))
+        fig_rsi.add_hline(y=70, line_dash="dot", line_color="red")
+        fig_rsi.add_hline(y=30, line_dash="dot", line_color="green")
         fig_rsi.update_layout(
             xaxis_title="Date",
             yaxis_title="RSI",
@@ -214,26 +184,21 @@ with tab2:
         )
         st.plotly_chart(fig_rsi, use_container_width=True)
     
-    # MACD chart
     if show_macd and "MACD" in data.columns and data["MACD"].notnull().any():
         st.subheader("Moving Average Convergence Divergence (MACD)")
-        
         fig_macd = go.Figure()
-        # MACD line
         fig_macd.add_trace(go.Scatter(
             x=data.index,
             y=data["MACD"],
             name="MACD",
             line=dict(color='blue', width=2)
-        )
-        # Signal line
+        ))
         fig_macd.add_trace(go.Scatter(
             x=data.index,
             y=data["MACD_signal"],
             name="Signal Line",
             line=dict(color='orange', width=2)
         ))
-        # Histogram
         colors = ['green' if val >= 0 else 'red' for val in data["MACD_hist"]]
         fig_macd.add_trace(go.Bar(
             x=data.index,
@@ -242,18 +207,12 @@ with tab2:
             marker_color=colors,
             opacity=0.5
         ))
-        
         fig_macd.update_layout(
             xaxis_title="Date",
             yaxis_title="MACD",
-            height=400,
-            barmode="relative"
+            height=400
         )
         st.plotly_chart(fig_macd, use_container_width=True)
-
-# Data summary
-with st.expander("Show raw data"):
-    st.dataframe(data.sort_index(ascending=False))
 
 # Footer
 st.markdown("---")
@@ -261,4 +220,4 @@ st.markdown("""
     <div style="text-align: center; color: grey;">
         <p>AI Crypto TradeIQ Dashboard • Data from Yahoo Finance</p>
     </div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)        
