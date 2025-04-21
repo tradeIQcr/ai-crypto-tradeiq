@@ -37,7 +37,6 @@ data.dropna(inplace=True)
 
 # Calculate indicators with error handling
 try:
-    try:
     close_series = data["Close"]
     data["RSI"] = ta.momentum.RSIIndicator(close=close_series).rsi()
 except Exception as e:
