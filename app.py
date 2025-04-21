@@ -37,9 +37,26 @@ data.dropna(inplace=True)
 
 # Calculate indicators with error handling
 try:
-    data["RSI"] = ta.momentum.RSIIndicator(close=data["Close"]).rsi()
+    try:
+    close_series = data["Close"]
+    data["RSI"] = ta.momentum.RSIIndicator(close=close_series).rsi()
 except Exception as e:
     st.warning(f"RSI calculation failed: {e}")
+
+try:
+    macd = ta.trend.MACD(close_series)
+    data["MACD"] = macd.macd()
+    data["MACD_signal"] = macd.macd_signal()
+except Exception as e:
+    st.warning(f"MACD calculation failed: {e}")
+
+try:
+    bb = ta.volatility.BollingerBands(close=close_series)
+    data["BB_upper"] = bb.bollinger_hband()
+    data["BB_lower"] = bb.bollinger_lband()
+except Exception as e:
+    st.warning(f"Bollinger Bands calculation failed: {e}")
+
     data["RSI"] = None
 
 try:
