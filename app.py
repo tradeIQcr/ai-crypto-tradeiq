@@ -29,13 +29,35 @@ else:
     data.dropna(inplace=True)
 
     # Technical indicators
-data["RSI"] = ta.momentum.RSIIndicator(close=data["Close"]).rsi()
-macd = ta.trend.MACD(data["Close"])
-data["MACD"] = macd.macd()
-data["MACD_signal"] = macd.macd_signal()
-bb = ta.volatility.BollingerBands(data["Close"])
-data["BB_upper"] = bb.bollinger_hband()
-data["BB_lower"] = bb.bollinger_lband()
+if data.empty or "Close" not in data.columns or data["Close"].isnull().all():
+    st.error("Geçerli veri bulunamadı. Lütfen farklı bir tarih aralığı veya sembol deneyin.")
+else:
+    data.dropna(inplace=True)
+
+    # RSI
+    try:
+        data["RSI"] = ta.momentum.RSIIndicator(close=data["Close"]).rsi()
+    except Exception as e:
+        data["RSI"] = None
+        st.warning(f"RSI hesaplanamadı: {e}")
+
+    # MACD
+    try:
+        macd = ta.trend.MACD(data["Close"])
+        data["MACD"] = macd.macd()
+        data["MACD_signal"] = macd.macd_signal()
+    except Exception as e:
+        data["MACD"] = data["MACD_signal"] = None
+        st.warning(f"MACD hesaplanamadı: {e}")
+
+    # Bollinger Bands
+    try:
+        bb = ta.volatility.BollingerBands(data["Close"])
+        data["BB_upper"] = bb.bollinger_hband()
+        data["BB_lower"] = bb.bollinger_lband()
+    except Exception as e:
+        data["BB_upper"] = data["BB_lower"] = None
+        st.warning(f"Bollinger Bantları hesaplanamadı: {e}")
 
 
     # Chart
