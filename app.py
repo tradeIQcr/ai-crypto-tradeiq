@@ -29,13 +29,14 @@ else:
     data.dropna(inplace=True)
 
     # Technical indicators
-    data["RSI"] = ta.momentum.RSIIndicator(close=data["Close"]).rsi()
-    macd = ta.trend.MACD(data["Close"])
-    data["MACD"] = macd.macd()
-    data["MACD_signal"] = macd.macd_signal()
-    bb = ta.volatility.BollingerBands(data["Close"])
-    data["BB_upper"] = bb.bollinger_hband()
-    data["BB_lower"] = bb.bollinger_lband()
+data["RSI"] = ta.momentum.RSIIndicator(close=data["Close"]).rsi()
+macd = ta.trend.MACD(data["Close"])
+data["MACD"] = macd.macd()
+data["MACD_signal"] = macd.macd_signal()
+bb = ta.volatility.BollingerBands(data["Close"])
+data["BB_upper"] = bb.bollinger_hband()
+data["BB_lower"] = bb.bollinger_lband()
+
 
     # Chart
     st.subheader(f"{symbol} Price Chart")
