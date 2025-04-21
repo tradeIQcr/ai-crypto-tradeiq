@@ -26,9 +26,11 @@ if data.empty or "Close" not in data.columns:
     st.stop()
 
 close_series = data["Close"]
-if close_series.isnull().all():
-    st.error("No valid closing price data available.")
+if data.empty or "Close" not in data.columns or data["Close"].dropna().empty:
+    st.error("No valid data available to calculate indicators. Try a different date or symbol.")
     st.stop()
+
+    
 
 # Drop NaN rows
 data.dropna(inplace=True)
